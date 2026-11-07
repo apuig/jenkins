@@ -24,10 +24,12 @@
 
 package jenkins.security;
 
+import edu.umd.cs.findbugs.annotations.CheckForNull;
 import edu.umd.cs.findbugs.annotations.NonNull;
 import hudson.ExtensionList;
 import hudson.ExtensionPoint;
 import hudson.security.SecurityRealm;
+import jakarta.servlet.http.HttpServletRequest;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.logging.Level;
@@ -62,6 +64,25 @@ public abstract class SecurityListener implements ExtensionPoint {
     protected void authenticated(@NonNull org.acegisecurity.userdetails.UserDetails details) {}
 
     /**
+     * Same event as {@link #authenticated2}, enriched with {@link AuthenticationDetails} (see
+     * {@link #ambientDetails()} for where this comes from and what {@code null} means here). Unlike
+     * {@code authenticated3} on the {@code prototype/option4-webauthentication-details}/
+     * {@code option5-enriched-authentication-details} branches, nothing is threaded through any call
+     * argument to get here: {@link #fireAuthenticated2} builds it ambiently instead, so every existing
+     * caller, including plugin code that fires it directly and is never touched for this (citations in
+     * this class's own test), gets it for free, with zero changes on their end.
+     *
+     * <p>Default implementation delegates to {@link #authenticated2}, so existing overrides keep working
+     * unchanged, same non-breaking pattern used when {@code authenticated2} itself was added.
+     *
+     * @param details details of the newly authenticated user, same as {@link #authenticated2}.
+     * @param authDetails see {@link #ambientDetails()}.
+     */
+    protected void authenticated3(@NonNull UserDetails details, @CheckForNull AuthenticationDetails authDetails) {
+        authenticated2(details);
+    }
+
+    /**
      * Fired when a user tried to authenticate but failed.
      * In case the authentication method uses multiple layers to validate the credentials,
      * we do fire this event only when even the last layer failed to authenticate.
@@ -71,12 +92,28 @@ public abstract class SecurityListener implements ExtensionPoint {
     protected void failedToAuthenticate(@NonNull String username){}
 
     /**
+     * Same mechanism as {@link #authenticated3}.
+     * @param authDetails see {@link #ambientDetails()}.
+     */
+    protected void failedToAuthenticate2(@NonNull String username, @CheckForNull AuthenticationDetails authDetails) {
+        failedToAuthenticate(username);
+    }
+
+    /**
      * Fired when a user has logged in. Compared to authenticated, there is a notion of storage / cache.
      * Would be called after {@link #authenticated2}.
      * It should be called after the {@link SecurityContextHolder#getContext()}'s authentication is set.
      * @param username the user
      */
     protected void loggedIn(@NonNull String username){}
+
+    /**
+     * Same mechanism as {@link #authenticated3}.
+     * @param authDetails see {@link #ambientDetails()}.
+     */
+    protected void loggedIn2(@NonNull String username, @CheckForNull AuthenticationDetails authDetails) {
+        loggedIn(username);
+    }
 
     /**
      * @since 2.161
@@ -93,6 +130,14 @@ public abstract class SecurityListener implements ExtensionPoint {
      * @param username the user
      */
     protected void failedToLogIn(@NonNull String username){}
+
+    /**
+     * Same mechanism as {@link #authenticated3}.
+     * @param authDetails see {@link #ambientDetails()}.
+     */
+    protected void failedToLogIn2(@NonNull String username, @CheckForNull AuthenticationDetails authDetails) {
+        failedToLogIn(username);
+    }
 
     /**
      * Fired when a user logs out.
@@ -113,9 +158,41 @@ public abstract class SecurityListener implements ExtensionPoint {
             }
             LOGGER.log(Level.FINE, "authenticated: {0} {1}", new Object[] {details.getUsername(), groups});
         }
+        fireEnriched(details, SecurityListener::authenticated3);
+    }
+
+    /**
+     * Reads whatever {@link RequestContextCaptureFilter} captured on this thread and wraps it, called
+     * once per {@code fire*} call by {@link #fireEnriched}, safe to call from a static dispatcher because
+     * the capturing {@code Filter}'s own {@code doFilter} call is still synchronously on the stack for
+     * every path this fires from (see {@link RequestContextCaptureFilter}'s own Javadoc for the full
+     * mechanism and the one condition it depends on: the configured {@link SecurityRealm}'s {@code createFilter}
+     * must be absent or additive).
+     *
+     * @return {@code null} if called from a thread with no captured request: either that condition doesn't
+     *     hold for the configured realm, or the call happened off the original request's thread.
+     */
+    @CheckForNull
+    private static AuthenticationDetails ambientDetails() {
+        HttpServletRequest request = RequestContextCaptureFilter.currentRequest();
+        return request == null ? null : new AuthenticationDetails(request);
+    }
+
+    /**
+     * Shared by every enriched {@code fire*} method, so
+     * adding a new one later gets ambient enrichment automatically instead of needing someone to
+     * remember to call {@link #ambientDetails()} and loop {@link #all()} by hand.
+     */
+    private static <T> void fireEnriched(@NonNull T payload, @NonNull EnrichedDispatch<T> dispatch) {
+        AuthenticationDetails authDetails = ambientDetails();
         for (SecurityListener l : all()) {
-            l.authenticated2(details);
+            dispatch.fire(l, payload, authDetails);
         }
+    }
+
+    @FunctionalInterface
+    private interface EnrichedDispatch<T> {
+        void fire(SecurityListener listener, T payload, @CheckForNull AuthenticationDetails authDetails);
     }
 
     /**
@@ -138,25 +215,19 @@ public abstract class SecurityListener implements ExtensionPoint {
     /** @since 1.569 */
     public static void fireFailedToAuthenticate(@NonNull String username) {
         LOGGER.log(Level.FINE, "failed to authenticate: {0}", username);
-        for (SecurityListener l : all()) {
-            l.failedToAuthenticate(username);
-        }
+        fireEnriched(username, SecurityListener::failedToAuthenticate2);
     }
 
     /** @since 1.569 */
     public static void fireLoggedIn(@NonNull String username) {
         LOGGER.log(Level.FINE, "logged in: {0}", username);
-        for (SecurityListener l : all()) {
-            l.loggedIn(username);
-        }
+        fireEnriched(username, SecurityListener::loggedIn2);
     }
 
     /** @since 1.569 */
     public static void fireFailedToLogIn(@NonNull String username) {
         LOGGER.log(Level.FINE, "failed to log in: {0}", username);
-        for (SecurityListener l : all()) {
-            l.failedToLogIn(username);
-        }
+        fireEnriched(username, SecurityListener::failedToLogIn2);
     }
 
     /** @since 1.569 */
