@@ -58,7 +58,6 @@ import jenkins.model.Jenkins;
 import jenkins.security.AcegiSecurityExceptionFilter;
 import jenkins.security.AuthenticationSuccessHandler;
 import jenkins.security.BasicHeaderProcessor;
-import jenkins.security.RequestContextCaptureFilter;
 import jenkins.security.stapler.StaplerNotDispatchable;
 import jenkins.util.SystemProperties;
 import net.sf.json.JSONObject;
@@ -648,7 +647,6 @@ public abstract class SecurityRealm implements Describable<SecurityRealm>, Exten
 
         SecurityComponents sc = getSecurityComponents();
         List<Filter> filters = new ArrayList<>();
-        filters.add(new RequestContextCaptureFilter()); // PROTOTYPE: must stay first in this list
         {
             HttpSessionSecurityContextRepository httpSessionSecurityContextRepository = new HttpSessionSecurityContextRepository();
             httpSessionSecurityContextRepository.setAllowSessionCreation(false);

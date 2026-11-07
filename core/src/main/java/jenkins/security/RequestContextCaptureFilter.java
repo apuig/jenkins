@@ -36,26 +36,24 @@ import org.kohsuke.accmod.Restricted;
 import org.kohsuke.accmod.restrictions.NoExternalUse;
 
 /**
- * Installed as the very first filter in {@link SecurityRealm}'s default filter chain
- * ({@link SecurityRealm#createFilterImpl}), ahead of {@code HttpSessionContextIntegrationFilter2},
- * {@code BasicHeaderProcessor}, and {@code AuthenticationProcessingFilter2}. Because
- * {@code ChainedServletFilter2} dispatches through that list via plain, synchronous, nested calls,
- * any {@link SecurityListener} callback firing deeper in that same call stack, during either
- * interactive form login or Basic/API-token authentication, runs while this filter's own
- * {@link #doFilter} call is still on the stack. A cooperating {@code SecurityListener}
- * implementation can therefore call {@link #currentRequest()} from inside its own callback and
- * get the real, live {@link HttpServletRequest}.
+ * Installed via its own fixed {@code <filter>}/{@code <filter-mapping>} entry in
+ * {@code web-fragment.xml}, ordered ahead of {@code authentication-filter}
+ * ({@link hudson.security.HudsonFilter}). Because the servlet container dispatches through that
+ * list via plain, synchronous, nested calls, any {@link SecurityListener} callback firing deeper
+ * in that same call stack, during either interactive form login or Basic/API-token authentication,
+ * runs while this filter's own {@link #doFilter} call is still on the stack. A cooperating
+ * {@code SecurityListener} implementation can therefore call {@link #currentRequest()} from inside
+ * its own callback and get the real, live {@link HttpServletRequest}.
  *
  * <p>Neither {@code Stapler.getCurrentRequest2()} nor a plugin-registered {@code Filter} (added via
  * {@code PluginServletFilter}/{@code HttpServletFilter}) can do this for an interactive login: those
  * run strictly after authentication, and for interactive login specifically, after a short-circuit
  * that means they never run at all for that request.
  *
- * <p>Coverage is conditional, not absolute: a {@link SecurityRealm} subclass whose own {@code createFilter}
- * override does not call {@code super.createFilter()}/{@code createFilterImpl()} at all (as opposed to
- * wrapping it additively, the way {@code org.jenkinsci.plugins.oic.OicSecurityRealm} does) never installs
- * this filter, and {@link #currentRequest()} is simply {@code null} for every listener callback firing
- * during that realm's requests. This is not something the class can detect or warn about.
+ * <p>Unlike routing this through {@link SecurityRealm#createFilterImpl}, this filter's own
+ * {@code web-fragment.xml} entry runs unconditionally, for every configured {@link SecurityRealm},
+ * regardless of whether that realm's {@code createFilter} override is additive: there is no realm
+ * that can prevent this filter from installing.
  */
 @Restricted(NoExternalUse.class)
 public class RequestContextCaptureFilter implements Filter {

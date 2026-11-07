@@ -166,11 +166,10 @@ public abstract class SecurityListener implements ExtensionPoint {
      * once per {@code fire*} call by {@link #fireEnriched}, safe to call from a static dispatcher because
      * the capturing {@code Filter}'s own {@code doFilter} call is still synchronously on the stack for
      * every path this fires from (see {@link RequestContextCaptureFilter}'s own Javadoc for the full
-     * mechanism and the one condition it depends on: the configured {@link SecurityRealm}'s {@code createFilter}
-     * must be absent or additive).
+     * mechanism).
      *
-     * @return {@code null} if called from a thread with no captured request: either that condition doesn't
-     *     hold for the configured realm, or the call happened off the original request's thread.
+     * @return {@code null} if called from a thread with no captured request, i.e. the call happened off
+     *     the original request's thread.
      */
     @CheckForNull
     private static AuthenticationDetails ambientDetails() {
