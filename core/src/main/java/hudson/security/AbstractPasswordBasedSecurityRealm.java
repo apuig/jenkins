@@ -16,6 +16,7 @@ import org.springframework.security.authentication.dao.AbstractUserDetailsAuthen
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
+import org.springframework.security.web.authentication.WebAuthenticationDetails;
 
 /**
  * Partial implementation of {@link SecurityRealm} for username/password based authentication.
@@ -104,10 +105,10 @@ public abstract class AbstractPasswordBasedSecurityRealm extends SecurityRealm {
         }
     }
 
-    private UserDetails doAuthenticate(String username, String password) throws AuthenticationException {
+    private UserDetails doAuthenticate(String username, String password, WebAuthenticationDetails webDetails) throws AuthenticationException {
         try {
             UserDetails user = authenticate2(username, password);
-            SecurityListener.fireAuthenticated2(user);
+            SecurityListener.fireAuthenticated3(user, webDetails);
             return user;
         } catch (AuthenticationException x) {
             SecurityListener.fireFailedToAuthenticate(username);
@@ -196,7 +197,9 @@ public abstract class AbstractPasswordBasedSecurityRealm extends SecurityRealm {
         @Override
         @SuppressFBWarnings(value = "NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE", justification = "TODO needs triage")
         protected UserDetails retrieveUser(String username, UsernamePasswordAuthenticationToken authentication) throws AuthenticationException {
-            return doAuthenticate(username, authentication.getCredentials().toString());
+            Object details = authentication.getDetails();
+            WebAuthenticationDetails webDetails = details instanceof WebAuthenticationDetails ? (WebAuthenticationDetails) details : null;
+            return doAuthenticate(username, authentication.getCredentials().toString(), webDetails);
         }
     }
 

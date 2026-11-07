@@ -24,6 +24,7 @@
 
 package jenkins.security;
 
+import edu.umd.cs.findbugs.annotations.CheckForNull;
 import edu.umd.cs.findbugs.annotations.NonNull;
 import hudson.ExtensionList;
 import hudson.ExtensionPoint;
@@ -35,6 +36,7 @@ import java.util.logging.Logger;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.web.authentication.WebAuthenticationDetails;
 
 /**
  * Listener notified of various significant events related to security.
@@ -60,6 +62,22 @@ public abstract class SecurityListener implements ExtensionPoint {
      */
     @Deprecated
     protected void authenticated(@NonNull org.acegisecurity.userdetails.UserDetails details) {}
+
+    /**
+     * Same event as {@link #authenticated2}, with the {@code remoteAddress}/{@code sessionId} pair
+     * Spring Security already builds for every password-based or Basic-auth authentication, previously
+     * built and then discarded before reaching this listener. Default implementation delegates to
+     * {@link #authenticated2}, so existing overrides keep working unchanged, same non-breaking pattern
+     * used when {@link #authenticated2} itself was added alongside the now-deprecated {@link #authenticated}.
+     *
+     * @param details details of the newly authenticated user, same as {@link #authenticated2}.
+     * @param webDetails the {@code remoteAddress}/{@code sessionId} pair, if the authentication path
+     *     that triggered this event built one; {@code null} for authentication paths that don't
+     *     (none confirmed yet; present for every path prototyped so far).
+     */
+    protected void authenticated3(@NonNull UserDetails details, @CheckForNull WebAuthenticationDetails webDetails) {
+        authenticated2(details);
+    }
 
     /**
      * Fired when a user tried to authenticate but failed.
@@ -125,6 +143,12 @@ public abstract class SecurityListener implements ExtensionPoint {
     @Deprecated
     public static void fireAuthenticated(@NonNull org.acegisecurity.userdetails.UserDetails details) {
         fireAuthenticated2(details.toSpring());
+    }
+
+    public static void fireAuthenticated3(@NonNull UserDetails details, @CheckForNull WebAuthenticationDetails webDetails) {
+        for (SecurityListener l : all()) {
+            l.authenticated3(details, webDetails);
+        }
     }
 
     /** @since 2.161 */

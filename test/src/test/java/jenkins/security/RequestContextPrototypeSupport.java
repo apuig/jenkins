@@ -43,7 +43,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 
 /**
- * PROTOTYPE, not a finished core contribution. Shared, mechanism-agnostic test fixtures reused across
+ * Shared, mechanism-agnostic test fixtures reused across
  * the several {@code prototype/*} branches investigating how to enhance {@link SecurityListener} with
  * request context (headers, remote address, session id). Lives on {@code prototype/request-context-base};
  * every other prototype branch in this series branches from here instead of {@code master} directly, so
