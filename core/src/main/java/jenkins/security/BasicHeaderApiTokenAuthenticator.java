@@ -13,7 +13,6 @@ import org.kohsuke.accmod.restrictions.NoExternalUse;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
-import org.springframework.security.web.authentication.WebAuthenticationDetails;
 
 /**
  * Checks if the password given in the BASIC header matches the user's API token.
@@ -37,7 +36,7 @@ public class BasicHeaderApiTokenAuthenticator extends BasicHeaderAuthenticator {
                 UserDetails userDetails = u.getUserDetailsForImpersonation2();
                 auth = u.impersonate(userDetails);
 
-                SecurityListener.fireAuthenticated3(userDetails, new WebAuthenticationDetails(req));
+                SecurityListener.fireAuthenticated3(userDetails, new AuthenticationDetails(req));
             } catch (UsernameNotFoundException x) {
                 // The token was valid, but the impersonation failed. This token is clearly not his real password,
                 // so there's no point in continuing the request processing. Report this error and abort.

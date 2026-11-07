@@ -36,7 +36,6 @@ import java.util.logging.Logger;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.security.web.authentication.WebAuthenticationDetails;
 
 /**
  * Listener notified of various significant events related to security.
@@ -71,11 +70,12 @@ public abstract class SecurityListener implements ExtensionPoint {
      * used when {@link #authenticated2} itself was added alongside the now-deprecated {@link #authenticated}.
      *
      * @param details details of the newly authenticated user, same as {@link #authenticated2}.
-     * @param webDetails the {@code remoteAddress}/{@code sessionId} pair, if the authentication path
-     *     that triggered this event built one; {@code null} for authentication paths that don't
-     *     (none confirmed yet; present for every path prototyped so far).
+     * @param authDetails remote address, session id, and an explicit header allow-list (never
+     *     {@code Authorization}), if the authentication path that triggered this event built one;
+     *     {@code null} for authentication paths that don't (none confirmed yet; present for every
+     *     path prototyped so far).
      */
-    protected void authenticated3(@NonNull UserDetails details, @CheckForNull WebAuthenticationDetails webDetails) {
+    protected void authenticated3(@NonNull UserDetails details, @CheckForNull AuthenticationDetails authDetails) {
         authenticated2(details);
     }
 
@@ -145,9 +145,9 @@ public abstract class SecurityListener implements ExtensionPoint {
         fireAuthenticated2(details.toSpring());
     }
 
-    public static void fireAuthenticated3(@NonNull UserDetails details, @CheckForNull WebAuthenticationDetails webDetails) {
+    public static void fireAuthenticated3(@NonNull UserDetails details, @CheckForNull AuthenticationDetails authDetails) {
         for (SecurityListener l : all()) {
-            l.authenticated3(details, webDetails);
+            l.authenticated3(details, authDetails);
         }
     }
 

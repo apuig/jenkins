@@ -29,11 +29,9 @@ import jenkins.model.Jenkins;
 import jenkins.util.SystemProperties;
 import org.kohsuke.accmod.Restricted;
 import org.kohsuke.accmod.restrictions.NoExternalUse;
-import org.springframework.security.authentication.AuthenticationDetailsSource;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.AuthenticationException;
-import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 
 /**
  * Checks if the password given in the BASIC header matches the user's actual password,
@@ -45,7 +43,6 @@ import org.springframework.security.web.authentication.WebAuthenticationDetailsS
 @Restricted(NoExternalUse.class)
 @Extension
 public class BasicHeaderRealPasswordAuthenticator extends BasicHeaderAuthenticator {
-    private AuthenticationDetailsSource authenticationDetailsSource = new WebAuthenticationDetailsSource();
 
     @Override
     public Authentication authenticate2(HttpServletRequest req, HttpServletResponse rsp, String username, String password) throws IOException, ServletException {
@@ -54,7 +51,9 @@ public class BasicHeaderRealPasswordAuthenticator extends BasicHeaderAuthenticat
 
         UsernamePasswordAuthenticationToken authRequest =
                 new UsernamePasswordAuthenticationToken(username, password);
-        authRequest.setDetails(authenticationDetailsSource.buildDetails(req));
+        // PROTOTYPE: req is already in scope here, build AuthenticationDetails directly, same as
+        // BasicHeaderApiTokenAuthenticator does; no AuthenticationDetailsSource indirection needed.
+        authRequest.setDetails(new AuthenticationDetails(req));
 
         try {
             Authentication a = Jenkins.get().getSecurityRealm().getSecurityComponents().manager2.authenticate(authRequest);

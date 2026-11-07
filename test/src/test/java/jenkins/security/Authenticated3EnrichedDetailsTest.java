@@ -25,7 +25,9 @@
 package jenkins.security;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 import hudson.ExtensionList;
 import java.util.ArrayList;
@@ -37,19 +39,23 @@ import org.jvnet.hudson.test.JenkinsRule.WebClient;
 import org.jvnet.hudson.test.TestExtension;
 import org.jvnet.hudson.test.junit.jupiter.WithJenkins;
 import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.security.web.authentication.WebAuthenticationDetails;
 
 /**
- * Demonstrates Option 4: {@code authenticated3} gets the
- * {@code remoteAddress}/{@code sessionId} pair Spring Security already built, with no new {@code Filter}
- * and no {@code ThreadLocal}, for interactive login, real-password Basic auth, and API-token Basic auth.
- * Does not cover headers (see {@code prototype/option5-enriched-authentication-details} for that), and
- * does not cover realms that fire {@link SecurityListener} directly from their own code (see
- * {@code REQUEST_CONTEXT_CONCLUSIONS.md} for the confirmed list: oic-auth-plugin, saml-plugin,
- * active-directory-plugin, ldap-plugin).
+ * Demonstrates Option 5: {@code authenticated3} gets
+ * {@link AuthenticationDetails}, a Jenkins-specific superset of Spring's {@code WebAuthenticationDetails}
+ * that also carries an explicit header allow-list, for interactive login and real-password Basic auth
+ * (both via a swapped {@code AuthenticationDetailsSource}) and API-token Basic auth (built inline, since
+ * that path already has the live request). Never carries the {@code Authorization} header, by construction
+ * ({@link AuthenticationDetails}'s allow-list doesn't include it).
+ *
+ * <p>Confirmed NOT realm-independent (see {@code REQUEST_CONTEXT_CONCLUSIONS.md}): oic-auth-plugin,
+ * saml-plugin, active-directory-plugin, and ldap-plugin all call {@code SecurityListener.fireAuthenticated2}
+ * directly from their own code, bypassing every call site this prototype touches.
  */
 @WithJenkins
-class Authenticated3WebDetailsTest {
+class Authenticated3EnrichedDetailsTest {
+
+    private static final String MARKER_HEADER = "X-Prototype-Marker";
 
     private JenkinsRule j;
     private Spy spy;
@@ -62,20 +68,22 @@ class Authenticated3WebDetailsTest {
     }
 
     @Test
-    void interactiveLoginGetsRemoteAddressAndSessionId() throws Exception {
+    void interactiveLoginGetsHeaderAndSessionId() throws Exception {
         j.jenkins.setSecurityRealm(j.createDummySecurityRealm());
         WebClient wc = j.createWebClient();
+        wc.addRequestHeader(MARKER_HEADER, "session-login-proof");
 
         wc.login("alice");
 
         assertEquals(1, spy.captured.size(), "authenticated3 should have fired exactly once");
-        WebAuthenticationDetails details = spy.captured.get(0);
-        assertNotNull(details, "authenticated3 should receive a non-null WebAuthenticationDetails for interactive login");
-        assertNotNull(details.getSessionId(), "interactive login should carry a session id");
+        AuthenticationDetails details = spy.captured.get(0);
+        assertNotNull(details, "authenticated3 should receive a non-null AuthenticationDetails for interactive login");
+        assertNotNull(details.getSessionId());
+        assertNull(details.getHeaders().get(MARKER_HEADER), "marker isn't on the allow-list, confirms the allow-list is enforced, not just absent by luck");
     }
 
     @Test
-    void realPasswordBasicAuthGetsRemoteAddressWithoutSessionId() throws Exception {
+    void realPasswordBasicAuthGetsUserAgentHeader() throws Exception {
         j.jenkins.setSecurityRealm(j.createDummySecurityRealm());
         WebClient wc = j.createWebClient();
         wc.withBasicCredentials("bob", "bob");
@@ -83,13 +91,14 @@ class Authenticated3WebDetailsTest {
         wc.goTo("whoAmI/api/json", "application/json");
 
         assertEquals(1, spy.captured.size(), "authenticated3 should have fired exactly once");
-        WebAuthenticationDetails details = spy.captured.get(0);
-        assertNotNull(details, "authenticated3 should receive a non-null WebAuthenticationDetails for real-password Basic auth");
-        assertNotNull(details.getRemoteAddress());
+        AuthenticationDetails details = spy.captured.get(0);
+        assertNotNull(details, "authenticated3 should receive a non-null AuthenticationDetails for real-password Basic auth");
+        assertFalse(details.getHeaders().get("User-Agent") == null || details.getHeaders().get("User-Agent").isEmpty(),
+                "User-Agent is on the allow-list and htmlunit always sends one");
     }
 
     @Test
-    void apiTokenBasicAuthAlsoGetsRemoteAddress() throws Exception {
+    void apiTokenBasicAuthGetsUserAgentHeaderToo() throws Exception {
         j.jenkins.setSecurityRealm(j.createDummySecurityRealm());
         hudson.model.User carol = hudson.model.User.getById("carol", true);
         ApiTokenProperty prop = carol.getProperty(ApiTokenProperty.class);
@@ -99,21 +108,21 @@ class Authenticated3WebDetailsTest {
         wc.goTo("whoAmI/api/json", "application/json");
 
         assertEquals(1, spy.captured.size(), "authenticated3 should have fired exactly once");
-        WebAuthenticationDetails details = spy.captured.get(0);
-        assertNotNull(details, "authenticated3 should receive a non-null WebAuthenticationDetails for API-token Basic auth too");
-        assertNotNull(details.getRemoteAddress());
+        AuthenticationDetails details = spy.captured.get(0);
+        assertNotNull(details, "authenticated3 should receive a non-null AuthenticationDetails for API-token Basic auth");
+        assertFalse(details.getHeaders().get("User-Agent") == null || details.getHeaders().get("User-Agent").isEmpty());
     }
 
     public abstract static class Spy extends SecurityListener {
-        final List<WebAuthenticationDetails> captured = new ArrayList<>();
+        final List<AuthenticationDetails> captured = new ArrayList<>();
 
         void clear() {
             captured.clear();
         }
 
         @Override
-        protected void authenticated3(UserDetails details, WebAuthenticationDetails webDetails) {
-            captured.add(webDetails);
+        protected void authenticated3(UserDetails details, AuthenticationDetails authDetails) {
+            captured.add(authDetails);
         }
     }
 

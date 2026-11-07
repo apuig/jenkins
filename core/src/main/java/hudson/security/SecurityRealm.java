@@ -44,6 +44,7 @@ import jakarta.servlet.Filter;
 import jakarta.servlet.FilterConfig;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.Cookie;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpSession;
 import java.io.IOException;
 import java.net.URLEncoder;
@@ -56,6 +57,7 @@ import java.util.logging.Logger;
 import jenkins.model.IdStrategy;
 import jenkins.model.Jenkins;
 import jenkins.security.AcegiSecurityExceptionFilter;
+import jenkins.security.AuthenticationDetails;
 import jenkins.security.AuthenticationSuccessHandler;
 import jenkins.security.BasicHeaderProcessor;
 import jenkins.security.stapler.StaplerNotDispatchable;
@@ -70,6 +72,7 @@ import org.kohsuke.stapler.StaplerRequest;
 import org.kohsuke.stapler.StaplerRequest2;
 import org.kohsuke.stapler.StaplerResponse;
 import org.kohsuke.stapler.StaplerResponse2;
+import org.springframework.security.authentication.AuthenticationDetailsSource;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.AuthenticationException;
@@ -666,6 +669,9 @@ public abstract class SecurityRealm implements Describable<SecurityRealm>, Exten
         {
             AuthenticationProcessingFilter2 apf = new AuthenticationProcessingFilter2(getAuthenticationGatewayUrl());
             apf.setAuthenticationManager(sc.manager2);
+            // PROTOTYPE: swap in AuthenticationDetails; see its own Javadoc.
+            AuthenticationDetailsSource<HttpServletRequest, AuthenticationDetails> authenticationDetailsSource = AuthenticationDetails::new;
+            apf.setAuthenticationDetailsSource(authenticationDetailsSource);
             if (SystemProperties.getInteger(SecurityRealm.class.getName() + ".sessionFixationProtectionMode", 1) == 1) {
                 // By default, use the 'canonical' protection from Spring Security; see AuthenticationProcessingFilter2#successfulAuthentication for alternative
                 apf.setSessionAuthenticationStrategy(new SessionFixationProtectionStrategy());
